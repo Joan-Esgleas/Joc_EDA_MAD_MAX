@@ -1,11 +1,19 @@
 # Prerequisites
 *.d
 
+# Archivos a ignorar
+*.deps
+*.cnf
+
 # Compiled Object files
 *.slo
 *.lo
 *.o
 *.obj
+*.Linux32
+*.Linux64
+*.MacOS
+*.MacOS.arm
 
 # Precompiled Headers
 *.gch
