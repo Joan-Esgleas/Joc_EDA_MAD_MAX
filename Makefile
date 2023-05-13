@@ -1,7 +1,8 @@
 
 # To be able to play with the Dummy:
 #
-# Copy AIDummy.o.Linux64 (in 64 bit architectures) to AIDummy.o
+# Copy AIDummy.o.Linux64 (in 64 bit architectures) to AIDummy.o:
+# cp AIDummy.o.Linux64 AIDummy.o
 #
 
 DUMMY_OBJ = AIDummy.o
