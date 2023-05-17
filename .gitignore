@@ -4,6 +4,7 @@
 # Archivos a ignorar
 *.deps
 *.cnf
+Game
 
 # Compiled Object files
 *.slo
