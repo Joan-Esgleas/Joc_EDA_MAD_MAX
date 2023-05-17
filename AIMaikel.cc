@@ -115,7 +115,7 @@ struct PLAYER_NAME : public Player {
         return cell(p).type == tipo;
     }
     bool Es_Cell_circulable (Pos p) {
-        if(not within_window(p,round())) return false;
+        if(cell(p).type == TYRE or cell(p).type == CAR or cell(p).type == MISSILE or not within_window(p,round())) return false;
         return true;
     }
     void Imprimir_posicion(Pos p) {
@@ -132,8 +132,8 @@ struct PLAYER_NAME : public Player {
         if (xi > xf) xf += number_universe_columns()-1;
         int delta_x = xf - xi;
         int delta_y = xf - xi;
-        d = sqrt((delta_x * delta_x) + (delta_y * delta_y));
-        return d;
+        
+        return sqrt(delta_x * delta_x + delta_y * delta_y);
     }
     Dir ir_a_pos(Pos ini, Pos fin) {
         int xf = second(fin);
@@ -281,6 +281,7 @@ struct PLAYER_NAME : public Player {
         
     }
     Node_Astar Primer_nodo_del_camino(Node_Astar& n, Pos co) {
+        cerr << "Camino hasta bous gas: "; Imprimir_posicion(n.p);
         if (son_pos_iguales(n.parent->p,co)) return n;
         else if (n.parent == nullptr) return n;
         else return Primer_nodo_del_camino(*(n.parent),co);
@@ -292,48 +293,38 @@ struct PLAYER_NAME : public Player {
         (*Open_set.begin()).p = co;
         (*Open_set.begin()).G_cost = 0;
         (*Open_set.begin()).H_cost = Calcular_distancia(co,cf);
-        int iterations = 0;
         while (not Open_set.empty()) {
-            Node_Astar current_node = (*Open_set.begin());
-            list<Node_Astar>::iterator temp_ptr = Open_set.begin();
-            list<Node_Astar>::iterator cn_ptr = Open_set.begin();
-            for (Node_Astar n_open: Open_set) {
-                if (n_open.F_cost() < current_node.F_cost()) {
-                    current_node = n_open;
-                    cn_ptr = temp_ptr;
+            list<Node_Astar>::iterator current_node = Open_set.begin();
+            list<Node_Astar>::iterator it = Open_set.begin();
+            while (it != Open_set.end()) {
+                if ((*it).F_cost() < (*current_node).F_cost()) {
+                    current_node = it;
                 }
-                else if (n_open.F_cost() == current_node.F_cost() and n_open.H_cost < current_node.H_cost) {
-                    current_node = n_open;
-                    cn_ptr = temp_ptr;
+                else if ((*it).F_cost() == (*current_node).F_cost() and (*it).H_cost < (*current_node).H_cost) {
+                    current_node = it;
                 }
-
-                ++temp_ptr;
+                ++it;
             }
-            
-            Open_set.erase(cn_ptr);
-            Close_set.push_back(current_node);
+            it = Close_set.insert(Close_set.end(),*current_node);
+            Open_set.erase(current_node);
+            current_node = it;
 
-            if (son_pos_iguales(current_node.p,cf)) {
+            if (son_pos_iguales((*current_node).p,cf)) {
                 cerr << "Acabamos astar" << endl;
-                return Primer_nodo_del_camino(current_node,co).p;
+                return Primer_nodo_del_camino((*current_node),co).p;
             }
             
-            for(Node_Astar neighbour:Get_neighbours(current_node)) {
+            for(Node_Astar neighbour:Get_neighbours((*current_node))) {
                 if(not Es_Cell_circulable(neighbour.p) or Is_in_Node_list(Close_set,neighbour)) continue;
-                double nMoveCosttoNeigh = current_node.G_cost + Calcular_distancia(current_node.p, neighbour.p);
+                double nMoveCosttoNeigh = (*current_node).G_cost + Calcular_distancia((*current_node).p, neighbour.p);
                 if (not Is_in_Node_list(Open_set,neighbour) or nMoveCosttoNeigh < neighbour.G_cost) {
                     neighbour.G_cost = nMoveCosttoNeigh;
                     neighbour.H_cost = Calcular_distancia(neighbour.p, cf);
-                    neighbour.parent = &current_node;
+                    neighbour.parent = &(*current_node);
                     if(not Is_in_Node_list(Open_set,neighbour)) Open_set.push_back(neighbour);
                 }
-                cerr << "Toy en el naverguu" << endl;
             }
-
-            iterations++;
-            cerr << iterations<< endl;
         }
-        cerr << iterations<< endl;
         return co+DEFAULT;
     }
     Pos algorith_Astar_np(Pos co, Pos cf) {
@@ -341,6 +332,7 @@ struct PLAYER_NAME : public Player {
     }
 
     void Tomar_decision() {
+         cerr << "Coche esta en: "; Imprimir_posicion(c[0].datos.pos);
         if(c[0].Posiciones_gas_bonus.empty()) ilde(0);
         else ir_a_gas_bonus(0);
     }
