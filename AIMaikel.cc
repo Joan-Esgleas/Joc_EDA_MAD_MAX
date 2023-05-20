@@ -36,9 +36,9 @@ struct PLAYER_NAME : public Player {
     typedef pair<double,Pos> dist_and_p;
     struct Node_Astar {
         // Distacia del node inicial
-        double G_cost;
+        double G_cost = INFINITY;
         // Distacia del node final
-        double H_cost;
+        double H_cost = INFINITY;
         double F_cost() {
             return G_cost + H_cost;
         }
@@ -115,25 +115,11 @@ struct PLAYER_NAME : public Player {
         return cell(p).type == tipo;
     }
     bool Es_Cell_circulable (Pos p) {
-        if(cell(p).type == TYRE or cell(p).type == CAR or cell(p).type == MISSILE or not within_window(p,round())) return false;
+        if(cell(p).type == TYRE or not within_window(p,round())) return false;
         return true;
     }
     void Imprimir_posicion(Pos p) {
         cerr << first(p) << ',' << second(p) << endl;
-    }
-
-    double Calcular_distancia(Pos ini, Pos fin) {
-        int xf = second(fin);
-        int xi = second(ini);
-        int yf = first(fin);
-        int yi = first(ini);
-        double d = INFINITY;
-        if(not comprobar_si_rango(ini, fin)) return d;
-        if (xi > xf) xf += number_universe_columns()-1;
-        int delta_x = xf - xi;
-        int delta_y = xf - xi;
-        
-        return sqrt(delta_x * delta_x + delta_y * delta_y);
     }
     Dir ir_a_pos(Pos ini, Pos fin) {
         int xf = second(fin);
@@ -164,6 +150,47 @@ struct PLAYER_NAME : public Player {
         }
         else usage("Intentas hacer un movimiento X ilegal");
         return DEFAULT;
+    }
+
+    bool Es_accion_segura(Dir d, int num_coche) {
+        Pos pp = c[num_coche].datos.pos + d;
+        if(not Es_Cell_circulable(pp)) return false;
+        else if (cell(pp-DEFAULT).type == MISSILE) return false;
+        return true;
+    }
+    bool Es_accion_segura(int num_coche) {
+        return Es_accion_segura(DEFAULT,num_coche);
+    }
+
+    pair<Dir,bool> Direccion_segura(int num_coche) {
+        for (int i = 0; i < 2; i++) {
+            for (int j = -1; j < 2; j++)
+            {
+                if(i == 0 and j == 0) continue;
+                else {
+                    Pos pn = {first(c[num_coche].datos.pos) + j, second(c[num_coche].datos.pos) + i};
+                    if(within_window(pn,round()+1) and cell(pn).type != TYRE and cell(pn - DEFAULT).type != MISSILE){
+                        return pair<Dir,bool> {ir_a_pos(c[num_coche].datos.pos,pn),true};
+                    }
+                }
+            }
+        }
+        return pair<Dir,bool>{DEFAULT,false};
+    }
+
+    double Calcular_distancia(Pos ini, Pos fin) {
+        int xf = second(fin);
+        int xi = second(ini);
+        int yf = first(fin);
+        int yi = first(ini);
+        double d = INFINITY;
+        if(not comprobar_si_rango(ini, fin)) return d;
+        if (xi > xf) xf += number_universe_columns()-1;
+        int delta_x = abs(xf - xi);
+        int delta_y = abs(yf - yi);
+
+        if(delta_x >= delta_y) return 12*delta_y + 10*(delta_x-delta_y);
+        else return 20*delta_x + 10*(delta_y-delta_x);
     }
     
     //void Tratar_muerte_coche(int numero_coche);
@@ -228,10 +255,7 @@ struct PLAYER_NAME : public Player {
         Ejecutar_Accion(MOVE,DEFAULT,num_coche);
     }
     void ir_a_gas_bonus(int num_coche) {
-        cerr << "Calculamos direccion: " << c.size() << ' ' << num_coche<< endl;
-        cerr << "Gas bonus en: "; Imprimir_posicion(c[num_coche].Posiciones_gas_bonus.top().second);
         Dir d_m = ir_a_pos(c[num_coche].datos.pos, algorith_Astar_np(c[num_coche].datos.pos, c[num_coche].Posiciones_gas_bonus.top().second));
-        cerr << "Ejecutamos accion"<< endl;
         Ejecutar_Accion(MOVE,d_m,num_coche);
     }
     void ir_a_missile_bonus(int num_coche) {
@@ -254,13 +278,17 @@ struct PLAYER_NAME : public Player {
             for (int j = -1; j < 2; j++)
             {
                 if(i == 0 and j == 0) continue;
-                Pos pn = {first(node.p) + j, second(node.p) + i};
-                if (within_window(pn,round())) {
-                    Node_Astar nn;
-                    nn.p = pn;
-                    nn.G_cost = INFINITY;
-                    nn.H_cost = INFINITY;
-                    nl.push_back(nn);
+                else {
+                    Pos pn = {first(node.p) + j, second(node.p) + i};
+                    if (within_window(pn,round())) {
+                        Node_Astar nn;
+                        nn.p = pn;
+                        nn.G_cost = INFINITY;
+                        nn.H_cost = INFINITY;
+                        if (Es_Cell_circulable(pn)) {
+                            nl.push_back(nn);
+                        }
+                    }
                 }
             }
             
@@ -281,18 +309,16 @@ struct PLAYER_NAME : public Player {
         
     }
     Node_Astar Primer_nodo_del_camino(Node_Astar& n, Pos co) {
-        cerr << "Camino hasta bous gas: "; Imprimir_posicion(n.p);
         if (son_pos_iguales(n.parent->p,co)) return n;
         else if (n.parent == nullptr) return n;
         else return Primer_nodo_del_camino(*(n.parent),co);
     }
     Pos algorith_Astar_np(Pos co, Pos cf, int Pasos_maximos) {
-        cerr << "Empezamos astar" << endl;
         list<Node_Astar> Open_set(1);
         list<Node_Astar> Close_set;
         (*Open_set.begin()).p = co;
         (*Open_set.begin()).G_cost = 0;
-        (*Open_set.begin()).H_cost = Calcular_distancia(co,cf);
+        (*Open_set.begin()).H_cost = INFINITY;
         while (not Open_set.empty()) {
             list<Node_Astar>::iterator current_node = Open_set.begin();
             list<Node_Astar>::iterator it = Open_set.begin();
@@ -310,7 +336,6 @@ struct PLAYER_NAME : public Player {
             current_node = it;
 
             if (son_pos_iguales((*current_node).p,cf)) {
-                cerr << "Acabamos astar" << endl;
                 return Primer_nodo_del_camino((*current_node),co).p;
             }
             
@@ -332,17 +357,30 @@ struct PLAYER_NAME : public Player {
     }
 
     void Tomar_decision() {
-         cerr << "Coche esta en: "; Imprimir_posicion(c[0].datos.pos);
         if(c[0].Posiciones_gas_bonus.empty()) ilde(0);
         else ir_a_gas_bonus(0);
     }
     void Ejecutar_Accion(Accion a, int num_coche) {
-        if(a == SHOOT) shoot(c[num_coche].datos.cid);
+        if(a == SHOOT){
+            if (Es_accion_segura(num_coche)) shoot(c[num_coche].datos.cid);
+            else {
+                pair<Dir,bool> Dir_seg = Direccion_segura(num_coche);
+                if (Dir_seg.second) move(c[num_coche].datos.cid,Dir_seg.second);
+                else if (c[num_coche].datos.nb_miss > 0) shoot(c[num_coche].datos.cid);
+                else shoot(c[num_coche].datos.cid);
+            }
+        }
         else usage("Accion incorrecta (accion ejecutada SHOOT)");
     }
     void Ejecutar_Accion(Accion a, Dir d, int num_coche) {
         if(a == MOVE) {
-            move(c[num_coche].datos.cid,d);
+            if (Es_accion_segura(d,num_coche)) move(c[num_coche].datos.cid,d);
+            else {
+                pair<Dir,bool> Dir_seg = Direccion_segura(num_coche);
+                if (Dir_seg.second) move(c[num_coche].datos.cid,Dir_seg.second);
+                else if (c[num_coche].datos.nb_miss > 0) shoot(c[num_coche].datos.cid);
+                else move(c[num_coche].datos.cid,d);
+            }
         }
         else usage("Accion incorrecta (accion ejecutada MOVE)");
     }
@@ -351,7 +389,6 @@ struct PLAYER_NAME : public Player {
     void Start() {
 
     }
-
     // Llamada 1 vez por ronda
     void Update() {
         c = vector<Cotxe>(0);
@@ -370,6 +407,8 @@ struct PLAYER_NAME : public Player {
     virtual void play () {
 
         if(round() == 0) Start();
+        
+        
         Update();
     }
 
