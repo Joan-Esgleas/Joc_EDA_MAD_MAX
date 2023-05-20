@@ -11,10 +11,6 @@ Game
 *.lo
 *.o
 *.obj
-*.Linux32
-*.Linux64
-*.MacOS
-*.MacOS.arm
 
 # Precompiled Headers
 *.gch
