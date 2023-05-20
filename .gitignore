@@ -3,7 +3,7 @@
 
 # Archivos a ignorar
 *.deps
-*.cnf
+*.res 
 Game
 
 # Compiled Object files
