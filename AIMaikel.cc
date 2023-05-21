@@ -1,10 +1,8 @@
-
 #include "Player.hh"
 #include<queue>
 #include<algorithm>
 #include<cmath>
 #include<list>
-#include<set>
 
 using namespace std;
 
@@ -13,7 +11,7 @@ using namespace std;
  * Write the name of your player and save this file
  * as AI<name>.cc
  */
-#define PLAYER_NAME Maikel
+#define PLAYER_NAME Maikel_v4
 
 struct PLAYER_NAME : public Player {
 
@@ -26,25 +24,129 @@ struct PLAYER_NAME : public Player {
         return new PLAYER_NAME;
     }
     
+    #define INF 999999;
 
-    /**
-     * Attributes for your player can be defined here.
-     */
+    // A* algorithm stuff
+    struct Nodo {
+        Pos posicion;
+        Dir direccion;
+        int costo_g;
+        int costo_h;
+    Nodo* padre;
 
-    #define MAX_PASOS 100
-    
-    typedef pair<double,Pos> dist_and_p;
-    struct Node_Astar {
-        // Distacia del node inicial
-        double G_cost = INFINITY;
-        // Distacia del node final
-        double H_cost = INFINITY;
-        double F_cost() {
-            return G_cost + H_cost;
-        }
-        Pos p;
-        Node_Astar* parent = nullptr;
+    Nodo(Pos pos, Dir dir, int g, int h, Nodo* padre)
+        : posicion(pos), direccion(dir), costo_g(g), costo_h(h), padre(padre) {}
+
+    int costo_total() const {
+        return costo_g + costo_h;
+    }
     };
+    struct ComparadorNodos {
+        bool operator()(const Nodo* nodo1, const Nodo* nodo2) const {
+            return nodo1->costo_total() > nodo2->costo_total();
+        }
+    };
+    bool Posicion_valida(Pos p, Car_Id c_id) {
+        if (not within_universe(p)) return false;
+        vector<Dir> all_dirs = {UP,DEFAULT,DOWN, SLOW_UP,SLOW, SLOW_DOWN};
+
+        bool other_car = false;
+
+        for(Dir d: all_dirs) {
+            if(within_universe(p-d)) {
+                other_car = cell(p-d).type == CAR and cell(p-d).cid != c_id;
+            }
+            if(other_car) break;
+        }
+
+        if(other_car or cell(p).type == TYRE or cell(p+Dir(0,-1)).type == MISSILE or cell(p+Dir(0,-2)).type == MISSILE or not within_window(p,round())) return false;
+        return true;
+    }   
+    list<Dir> Camino_rapido(Pos ini, Pos fin, Car_Id c_id) {
+        list<Dir> camino;
+        if (!Posicion_valida(ini,c_id) || !Posicion_valida(fin,c_id)) {
+            //cerr << "Posiciones no válidas." << endl;
+            return camino;
+        }
+
+        vector<vector<bool>> visitado(number_universe_columns(), vector<bool>(number_universe_columns(), false));
+        priority_queue<Nodo*, vector<Nodo*>, ComparadorNodos> abiertos;
+
+        abiertos.push(new Nodo(ini, DEFAULT, 0, abs(fin - ini), nullptr));
+
+        while (!abiertos.empty()) {
+            Nodo* actual = abiertos.top();
+            abiertos.pop();
+
+            if (actual->posicion == fin) {
+                // Construir el camino desde el nodo final hasta el inicio
+                Nodo* nodo = actual;
+                while (nodo->padre != nullptr) {
+                    camino.push_front(nodo->direccion);
+                    nodo = nodo->padre;
+                }
+
+                // Liberar la memoria de los nodos creados
+                while (!abiertos.empty()) {
+                    delete abiertos.top();
+                    abiertos.pop();
+                }
+
+                return camino;
+            }
+
+        visitado[actual->posicion.real()][actual->posicion.imag()] = true;
+
+            for (Dir dir : {UP, DEFAULT, DOWN, SLOW_UP, SLOW, SLOW_DOWN, FAST_UP, FAST, FAST_DOWN}) {
+                Pos nueva_posicion = actual->posicion + dir;
+                Pos pos_intermedia_1 = actual->posicion + dir;
+                Pos pos_intermedia_2 = actual->posicion + dir;
+                Pos pos_intermedia_3 = actual->posicion + dir;
+                Pos pos_intermedia_4 = actual->posicion + dir;
+                if (dir == UP or dir == DOWN) {
+                    if (dir == UP) {
+                        pos_intermedia_1 = actual->posicion + Dir(-1,0);
+                        pos_intermedia_2 = actual->posicion + Dir(0,1);
+                    }
+                    else if (dir == DOWN) {
+                        pos_intermedia_1 = actual->posicion + Dir(1,0);
+                        pos_intermedia_2 = actual->posicion + Dir(0,1);
+                    }
+                }
+                else if (dir == FAST) {
+                    pos_intermedia_1 = actual->posicion + Dir(0,1);
+                    pos_intermedia_2 = actual->posicion + Dir(0,2);
+                }
+                if (dir == FAST_UP or dir == FAST_DOWN) {
+                    if (dir == FAST_UP) {
+                        pos_intermedia_1 = actual->posicion + Dir(-1,0);
+                        pos_intermedia_2 = actual->posicion + Dir(0,1);
+                        pos_intermedia_3 = actual->posicion + Dir(0,2);
+                        pos_intermedia_4 = actual->posicion + Dir(-1,1);
+                    }
+                    else if (dir == FAST_DOWN) {
+                        pos_intermedia_1 = actual->posicion + Dir(1,0);
+                        pos_intermedia_2 = actual->posicion + Dir(0,1);
+                        pos_intermedia_3 = actual->posicion + Dir(0,2);
+                        pos_intermedia_4 = actual->posicion + Dir(1,1);
+                    }
+                }
+                bool P_v = Posicion_valida(nueva_posicion,c_id) && Posicion_valida(pos_intermedia_1,c_id) && Posicion_valida(pos_intermedia_2,c_id) && Posicion_valida(pos_intermedia_3,c_id) && Posicion_valida(pos_intermedia_4,c_id);
+                if (P_v && !visitado[nueva_posicion.real()][nueva_posicion.imag()]) {
+                    int costo_g = actual->costo_g + 1;
+                    int costo_h = abs(fin - nueva_posicion);
+                    abiertos.push(new Nodo(nueva_posicion, dir, costo_g, costo_h, actual));
+                    visitado[nueva_posicion.real()][nueva_posicion.imag()] = true;
+                }
+            }
+        }
+
+        //cerr << "No se encontró un camino válido." << endl;
+        return camino;
+    }
+
+    // Utility
+    typedef pair<int,Pos> dist_and_p;
     struct cmp_dist_p {
         bool operator()(const dist_and_p& a, const dist_and_p& b) const {
         // Comparación basada en la magnitud del número complejo
@@ -52,157 +154,49 @@ struct PLAYER_NAME : public Player {
         }
     };
     struct cmp_dist_c {
-        bool operator()(const pair<double,Car>& a, const pair<double,Car>& b) const {
+        bool operator()(const pair<int,Car>& a, const pair<int,Car>& b) const {
         // Comparación basada en la magnitud del número complejo
         return a.first > b.first;
         }
     };
-    struct cmp_a_star {
-        bool operator()(const Node_Astar& a, const Node_Astar& b) const {
-        // Comparación basada en la magnitud del número complejo
-        return (a.G_cost + a.H_cost) > (b.G_cost + b.H_cost);
-        }
-    };
     typedef priority_queue<dist_and_p, vector<dist_and_p>, cmp_dist_p> priority_queue_dist_and_p;
-    typedef priority_queue<pair<double,Car>, vector<pair<double,Car>>, cmp_dist_c> priority_queue_dist_and_c;
-    typedef enum Accion {
-        ILDE,
-        IR_A_GAS,
-        IR_A_BONUS,
-        IR_A_MISSIL,
-        ATACAR,
-        EVADIR,
-        SHOOT,
-        MOVE
-    } Accion;
-    typedef struct Cotxe {
+    typedef priority_queue<pair<int,Car>, vector<pair<int,Car>>, cmp_dist_c> priority_queue_dist_and_c;
+    typedef struct Coche {
         Car datos;
-        Accion accion;
+        Pos objetivo;
         priority_queue_dist_and_p Posiciones_water_bonus;
         priority_queue_dist_and_p Posiciones_gas_bonus;
         priority_queue_dist_and_p Posiciones_missil_bonus;
-        priority_queue_dist_and_p Posiciones_missil;
         priority_queue_dist_and_c Posiciones_coches_enemigos;
-    }Cotxe;
-    vector<Cotxe> c;
-    /**
-     * Play method.
-     * 
-     * This method will be invoked once per each round.
-     * You have to read the board here to place your actions
-     * for this round.
-     *
-     */
-    bool usage(string s) {
-        cerr << "fatal error: " << s << endl;
-        exit(EXIT_FAILURE);
-    }
+    }Coche;
+    vector<Coche> c;
     void add_elem(priority_queue_dist_and_p& v, dist_and_p elem) {
         v.push(elem);
     }
-    void add_elem(priority_queue_dist_and_c& v, pair<double,Car> elem) {
+    void add_elem(priority_queue_dist_and_c& v, pair<int,Car> elem) {
         v.push(elem);
     }
-    bool comprobar_si_rango(Pos pos1, Pos pos2) {
-        int xf = second(pos2);
-        int xi = second(pos1);
-        int yf = first(pos2);
-        int yi = first(pos1);
 
-        return true;
-    }
-    bool Comprovar_Cell(Pos p, CType tipo) {
-        return cell(p).type == tipo;
-    }
-    bool Es_Cell_circulable (Pos p) {
-        if(cell(p).type == TYRE or not within_window(p,round())) return false;
-        return true;
-    }
-    void Imprimir_posicion(Pos p) {
-        cerr << first(p) << ',' << second(p) << endl;
-    }
-    Dir ir_a_pos(Pos ini, Pos fin) {
-        int xf = second(fin);
-        int xi = second(ini);
-        int yf = first(fin);
-        int yi = first(ini);
-        if (xi > xf) xf += number_universe_columns()-1;
-        int delta_x = xf - xi;
-        int delta_y = yf - yi;
-        if (delta_x == 0) {
-            if (delta_y == 0) return SLOW;
-            if (delta_y == -1) return SLOW_UP;
-            if (delta_y == 1) return SLOW_DOWN;
-            else usage("Intentas hacer un movimiento Y ilegal");
 
-        }
-        if (delta_x == 1) {
-            if (delta_y == 0) return DEFAULT;
-            if (delta_y == -1) return UP;
-            if (delta_y == 1) return DOWN;
-            else usage("Intentas hacer un movimiento Y ilegal");
-        }
-        if (delta_x == 2) {
-            if (delta_y == 0) return FAST;
-            if (delta_y == -1) return FAST_UP;
-            if (delta_y == 1) return FAST_DOWN;
-            else usage("Intentas hacer un movimiento Y ilegal");
-        }
-        else usage("Intentas hacer un movimiento X ilegal");
-        return DEFAULT;
-    }
-
-    bool Es_accion_segura(Dir d, int num_coche) {
-        Pos pp = c[num_coche].datos.pos + d;
-        if(not Es_Cell_circulable(pp)) return false;
-        else if (cell(pp-DEFAULT).type == MISSILE) return false;
-        return true;
-    }
-    bool Es_accion_segura(int num_coche) {
-        return Es_accion_segura(DEFAULT,num_coche);
-    }
-
-    pair<Dir,bool> Direccion_segura(int num_coche) {
-        for (int i = 0; i < 2; i++) {
-            for (int j = -1; j < 2; j++)
-            {
-                if(i == 0 and j == 0) continue;
-                else {
-                    Pos pn = {first(c[num_coche].datos.pos) + j, second(c[num_coche].datos.pos) + i};
-                    if(within_window(pn,round()+1) and cell(pn).type != TYRE and cell(pn - DEFAULT).type != MISSILE){
-                        return pair<Dir,bool> {ir_a_pos(c[num_coche].datos.pos,pn),true};
-                    }
-                }
-            }
-        }
-        return pair<Dir,bool>{DEFAULT,false};
-    }
-
-    double Calcular_distancia(Pos ini, Pos fin) {
-        int xf = second(fin);
-        int xi = second(ini);
-        int yf = first(fin);
-        int yi = first(ini);
-        double d = INFINITY;
-        if(not comprobar_si_rango(ini, fin)) return d;
-        if (xi > xf) xf += number_universe_columns()-1;
-        int delta_x = abs(xf - xi);
-        int delta_y = abs(yf - yi);
-
-        if(delta_x >= delta_y) return 12*delta_y + 10*(delta_x-delta_y);
-        else return 20*delta_x + 10*(delta_y-delta_x);
-    }
+    int Distancia(Pos ini, Pos fin) {
+        int x_diff = abs(first(fin) - first(ini));
+        int y_diff = abs(second(fin) - second(ini));
     
-    //void Tratar_muerte_coche(int numero_coche);
-
+        int diagonal_moves = min(x_diff, y_diff);
+        int straight_moves = max(x_diff, y_diff) - diagonal_moves;
+    
+        int total_moves = diagonal_moves + straight_moves;
+    
+        return total_moves;
+    }
     void Registrar_coche(Car_Id id, Pos p) {
-        for(Cotxe cn:c) {
+        for(Coche cn:c) {
             if(cn.datos.cid == id) return;
         }
         int size_c = c.size();
         for (int i = 0; i < size_c; i++) {
-            pair<double,Car> cot_1;
-            double dist_1 = Calcular_distancia(c[i].datos.pos,p);
+            pair<int,Car> cot_1;
+            int dist_1 = Distancia(c[i].datos.pos,p);
             cot_1 = make_pair(dist_1, car(id));
             add_elem(c[i].Posiciones_coches_enemigos, cot_1);
         }
@@ -210,29 +204,22 @@ struct PLAYER_NAME : public Player {
     void Registrar_gas_bonus(Pos p) {
         int size_c = c.size();
         for (int i = 0; i < size_c; i++) {
-            dist_and_p dp = make_pair(Calcular_distancia(c[i].datos.pos,p),p);
+            dist_and_p dp = make_pair(Distancia(c[i].datos.pos,p),p);
             add_elem(c[i].Posiciones_gas_bonus, dp);
         }        
     }
     void Registrar_water_bonus(Pos p) {
         int size_c = c.size();
         for (int i = 0; i < size_c; i++) {
-            dist_and_p dp = make_pair(Calcular_distancia(c[i].datos.pos,p),p);
+            dist_and_p dp = make_pair(Distancia(c[i].datos.pos,p),p);
             add_elem(c[i].Posiciones_water_bonus, dp);
         }
     }
     void Registrar_missile_bonus(Pos p) {
         int size_c = c.size();
         for (int i = 0; i < size_c; i++) {
-            dist_and_p dp = make_pair(Calcular_distancia(c[i].datos.pos,p),p);
+            dist_and_p dp = make_pair(Distancia(c[i].datos.pos,p),p);
             add_elem(c[i].Posiciones_missil_bonus, dp);
-        }
-    }
-    void Registrar_missil(Pos p) {
-        int size_c = c.size();
-        for (int i = 0; i < size_c; i++) {
-            dist_and_p dp = make_pair(Calcular_distancia(c[i].datos.pos,p),p);
-            add_elem(c[i].Posiciones_missil, dp);
         }
     }
     void Registrar_board() {
@@ -250,169 +237,157 @@ struct PLAYER_NAME : public Player {
         }
     }
 
-
-    void ilde(int num_coche) {
-        Ejecutar_Accion(MOVE,DEFAULT,num_coche);
-    }
-    void ir_a_gas_bonus(int num_coche) {
-        Dir d_m = ir_a_pos(c[num_coche].datos.pos, algorith_Astar_np(c[num_coche].datos.pos, c[num_coche].Posiciones_gas_bonus.top().second));
-        Ejecutar_Accion(MOVE,d_m,num_coche);
-    }
-    void ir_a_missile_bonus(int num_coche) {
-        Dir d_m = ir_a_pos(c[num_coche].datos.pos, algorith_Astar_np(c[num_coche].datos.pos, c[num_coche].Posiciones_missil_bonus.top().second));
-        Ejecutar_Accion(MOVE,d_m,num_coche);
-    }
-    void ir_a_water_bonus(int num_coche) {
-        Dir d_m = ir_a_pos(c[num_coche].datos.pos, algorith_Astar_np(c[num_coche].datos.pos, c[num_coche].Posiciones_water_bonus.top().second));
-        Ejecutar_Accion(MOVE,d_m,num_coche);
-    }
-    //void evadir(int num_coche);
-    void atacar(int num_coche) {
-        Ejecutar_Accion(SHOOT,num_coche);
-    }
-
-
-    list<Node_Astar> Get_neighbours (Node_Astar node) {
-        list<Node_Astar> nl;
-        for (int i = 0; i < 3; i++) {
-            for (int j = -1; j < 2; j++)
-            {
-                if(i == 0 and j == 0) continue;
-                else {
-                    Pos pn = {first(node.p) + j, second(node.p) + i};
-                    if (within_window(pn,round())) {
-                        Node_Astar nn;
-                        nn.p = pn;
-                        nn.G_cost = INFINITY;
-                        nn.H_cost = INFINITY;
-                        if (Es_Cell_circulable(pn)) {
-                            nl.push_back(nn);
-                        }
+    bool evadir(int num_coche) {
+        vector<Dir> all_dirs = {UP,DEFAULT,DOWN, SLOW_UP,SLOW, SLOW_DOWN};
+        Pos pp = c[num_coche].datos.pos + DEFAULT;
+        Dir dd = DEFAULT;
+        bool trobat = false;
+        for(Dir d: all_dirs) {
+            pp = c[num_coche].datos.pos + d;
+            dd = d;
+            if(within_universe(pp)) {
+                if(cell(pp+Dir(0,-1)).type != MISSILE or cell(pp+Dir(0,-2)).type != MISSILE) {
+                    if (cell(pp).type == GAS_BONUS or cell(pp).type == MISSILE_BONUS or cell(pp).type == WATER_BONUS or cell(pp).type == EMPTY) {
+                        trobat = true;
+                        break;
                     }
                 }
             }
-            
         }
-        return nl;
-        
-    }
-    bool son_pos_iguales(Pos p1, Pos p2) {
-        return first(p1) == first(p2) and second(p1) == second(p2);
-    }
-    bool Is_in_Node_list(list<Node_Astar>& l, Node_Astar& elem) {
-        list<Node_Astar>::iterator it = l.begin();
-        while (it != l.end()) {
-            if (son_pos_iguales((*it).p,elem.p)) return true;
-            ++it;
+        if(trobat) {
+            move(c[num_coche].datos.cid,dd);
+            return true;
         }
         return false;
-        
     }
-    Node_Astar Primer_nodo_del_camino(Node_Astar& n, Pos co) {
-        if (son_pos_iguales(n.parent->p,co)) return n;
-        else if (n.parent == nullptr) return n;
-        else return Primer_nodo_del_camino(*(n.parent),co);
-    }
-    Pos algorith_Astar_np(Pos co, Pos cf, int Pasos_maximos) {
-        list<Node_Astar> Open_set(1);
-        list<Node_Astar> Close_set;
-        (*Open_set.begin()).p = co;
-        (*Open_set.begin()).G_cost = 0;
-        (*Open_set.begin()).H_cost = INFINITY;
-        while (not Open_set.empty()) {
-            list<Node_Astar>::iterator current_node = Open_set.begin();
-            list<Node_Astar>::iterator it = Open_set.begin();
-            while (it != Open_set.end()) {
-                if ((*it).F_cost() < (*current_node).F_cost()) {
-                    current_node = it;
-                }
-                else if ((*it).F_cost() == (*current_node).F_cost() and (*it).H_cost < (*current_node).H_cost) {
-                    current_node = it;
-                }
-                ++it;
-            }
-            it = Close_set.insert(Close_set.end(),*current_node);
-            Open_set.erase(current_node);
-            current_node = it;
-
-            if (son_pos_iguales((*current_node).p,cf)) {
-                return Primer_nodo_del_camino((*current_node),co).p;
-            }
-            
-            for(Node_Astar neighbour:Get_neighbours((*current_node))) {
-                if(not Es_Cell_circulable(neighbour.p) or Is_in_Node_list(Close_set,neighbour)) continue;
-                double nMoveCosttoNeigh = (*current_node).G_cost + Calcular_distancia((*current_node).p, neighbour.p);
-                if (not Is_in_Node_list(Open_set,neighbour) or nMoveCosttoNeigh < neighbour.G_cost) {
-                    neighbour.G_cost = nMoveCosttoNeigh;
-                    neighbour.H_cost = Calcular_distancia(neighbour.p, cf);
-                    neighbour.parent = &(*current_node);
-                    if(not Is_in_Node_list(Open_set,neighbour)) Open_set.push_back(neighbour);
-                }
-            }
+    bool Ir_gas(int num_coche) {
+        int id_compa = 0;
+        if(num_coche == id_compa) id_compa = 1;
+        Pos obj_compa = c[id_compa].objetivo;
+        Pos p = c[num_coche].Posiciones_gas_bonus.top().second;
+        if (first(p) == first(obj_compa) and second(p) == second(obj_compa)) {
+            c[num_coche].Posiciones_gas_bonus.pop();
+            p = c[num_coche].Posiciones_gas_bonus.top().second;
         }
-        return co+DEFAULT;
-    }
-    Pos algorith_Astar_np(Pos co, Pos cf) {
-        return algorith_Astar_np(co,cf,MAX_PASOS);
-    }
-
-    void Tomar_decision() {
-        if(c[0].Posiciones_gas_bonus.empty()) ilde(0);
-        else ir_a_gas_bonus(0);
-    }
-    void Ejecutar_Accion(Accion a, int num_coche) {
-        if(a == SHOOT){
-            if (Es_accion_segura(num_coche)) shoot(c[num_coche].datos.cid);
-            else {
-                pair<Dir,bool> Dir_seg = Direccion_segura(num_coche);
-                if (Dir_seg.second) move(c[num_coche].datos.cid,Dir_seg.second);
-                else if (c[num_coche].datos.nb_miss > 0) shoot(c[num_coche].datos.cid);
-                else shoot(c[num_coche].datos.cid);
-            }
+        list<Dir> cam = Camino_rapido(c[num_coche].datos.pos,p,c[num_coche].datos.cid);
+        if (not cam.empty()) {
+            move(c[num_coche].datos.cid,cam.front());
+            c[num_coche].objetivo = p;
+            return true;
         }
-        else usage("Accion incorrecta (accion ejecutada SHOOT)");
+        return false;
     }
-    void Ejecutar_Accion(Accion a, Dir d, int num_coche) {
-        if(a == MOVE) {
-            if (Es_accion_segura(d,num_coche)) move(c[num_coche].datos.cid,d);
-            else {
-                pair<Dir,bool> Dir_seg = Direccion_segura(num_coche);
-                if (Dir_seg.second) move(c[num_coche].datos.cid,Dir_seg.second);
-                else if (c[num_coche].datos.nb_miss > 0) shoot(c[num_coche].datos.cid);
-                else move(c[num_coche].datos.cid,d);
-            }
+    bool Ir_water(int num_coche) {
+        int id_compa = 0;
+        if(num_coche == id_compa) id_compa = 1;
+        Pos obj_compa = c[id_compa].objetivo;
+        Pos p = c[num_coche].Posiciones_water_bonus.top().second;
+        if (first(p) == first(obj_compa) and second(p) == second(obj_compa)) {
+            c[num_coche].Posiciones_water_bonus.pop();
+            p = c[num_coche].Posiciones_water_bonus.top().second;
         }
-        else usage("Accion incorrecta (accion ejecutada MOVE)");
+        list<Dir> cam = Camino_rapido(c[num_coche].datos.pos,p,c[num_coche].datos.cid);
+        if (not cam.empty()) {
+            move(c[num_coche].datos.cid,cam.front());
+            c[num_coche].objetivo = p;
+            return true;
+        }
+        return false;
+    }
+    bool Ir_missile_bonus(int num_coche) {
+        int id_compa = 0;
+        if(num_coche == id_compa) id_compa = 1;
+        Pos obj_compa = c[id_compa].objetivo;
+        Pos p = c[num_coche].Posiciones_missil_bonus.top().second;
+        if (first(p) == first(obj_compa) and second(p) == second(obj_compa)) {
+            c[num_coche].Posiciones_missil_bonus.pop();
+            p = c[num_coche].Posiciones_missil_bonus.top().second;
+        }
+        list<Dir> cam = Camino_rapido(c[num_coche].datos.pos,p,c[num_coche].datos.cid);
+        if (not cam.empty()) {
+            move(c[num_coche].datos.cid,cam.front());
+            c[num_coche].objetivo = p;
+            return true;
+        }
+        return false;
+    }
+    
+    void Tomar_decision(int nc) {
+        if(c[nc].datos.gas < 30) {
+            if (Ir_gas(nc)) return;
+            else if (c[nc].datos.nb_miss <= 3) {
+                if (Ir_missile_bonus(nc)) return;
+                else if (Ir_water(nc)) return;
+                else if (c[nc].datos.nb_miss > 0) {
+                    shoot(c[nc].datos.cid);
+                    return;
+                }
+                else if (evadir(nc)) return;
+                else shoot(c[nc].datos.cid);
+            }
+            else if (Ir_water(nc)) return;
+            else if (Ir_missile_bonus(nc)) return;
+            else if (c[nc].datos.nb_miss > 0) {
+                    shoot(c[nc].datos.cid);
+                    return;
+                }
+            else if (evadir(nc)) return;
+            else shoot(c[nc].datos.cid);
+        }
+        else if (c[nc].datos.nb_miss <= 3) {
+            if (Ir_missile_bonus(nc)) return;
+            else if (Ir_water(nc)) return;
+            else if (Ir_gas(nc)) return;
+            else if (c[nc].datos.nb_miss > 0) {
+                    shoot(c[nc].datos.cid);
+                    return;
+                }
+            else if (evadir(nc)) return;
+            else shoot(c[nc].datos.cid);
+        }
+        else {
+            if (Ir_water(nc)) return;
+            else if (Ir_gas(nc)) return;
+            else if (Ir_missile_bonus(nc)) return;
+            else if (c[nc].datos.nb_miss > 0) {
+                    shoot(c[nc].datos.cid);
+                    return;
+                }
+            else if (evadir(nc)) return;
+            else shoot(c[nc].datos.cid);
+        }
+
+        shoot(c[nc].datos.cid);
     }
 
-    //Llamado solo al inicio de la partida
-    void Start() {
-
-    }
     // Llamada 1 vez por ronda
     void Update() {
-        c = vector<Cotxe>(0);
+        c = vector<Coche>(0);
         for (Car_Id cid = begin(me()); cid != end(me()); ++cid) {
             Car cr = car(cid);
-            Cotxe nc;
-            nc.datos = cr;
-            c.push_back(nc);
+            Coche cc;
+            cc.datos = cr;
+            cc.objetivo = Pos(17,17);
+            c.push_back(cc);
         }
-        cerr << c.size()<< endl;
         Registrar_board();
-        Tomar_decision();
-
+        
+        if(round() == 0) {
+            shoot(c[0].datos.cid);
+            Tomar_decision(1);
+        }
+        else if(round()> 1) {
+            Tomar_decision(0);
+            Tomar_decision(1);
+        }
+        else if(round() <= 1) {
+            Tomar_decision(1);
+        }
     }
 
     virtual void play () {
-
-        if(round() == 0) Start();
-        
-        
         Update();
     }
-
-    
 };
 
 

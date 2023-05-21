@@ -5,7 +5,7 @@
 # cp AIDummy.o.Linux64 AIDummy.o
 #
 
-DUMMY_OBJ = AIDummy.o
+DUMMY_OBJ = AIDummy.o AIfiat500.o AIPuji_4.o
 
 # Add here any extra .o player files you want to link to the executable
 EXTRA_OBJS =
